@@ -84,7 +84,7 @@ type Config struct {
 	// toCache stores the JSON marshalled version of the config to be cached. It should be a copy of
 	// the config pulled from cloud with minor changes.
 	// This version is kept because the config is changed as it moves through the system.
-	toCache []byte
+	ToCache []byte
 }
 
 // MaintenanceConfig specifies a sensor that the machine will check to determine if the machine should reconfigure.
@@ -271,20 +271,20 @@ func (c *Config) SetToCache(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	c.toCache = md
+	c.ToCache = md
 	return nil
 }
 
 // StoreToCache caches the toCache.
 func (c *Config) StoreToCache() error {
-	if c.toCache == nil {
+	if c.ToCache == nil {
 		return errors.New("no unprocessed config to cache")
 	}
 	if err := os.MkdirAll(ViamDotDir, 0o700); err != nil {
 		return err
 	}
-	reader := bytes.NewReader(c.toCache)
-	path := getCloudCacheFilePath(c.Cloud.ID)
+	reader := bytes.NewReader(c.ToCache)
+	path := GetCloudCacheFilePath(c.Cloud.ID)
 	return artifact.AtomicStore(path, reader, c.Cloud.ID)
 }
 

@@ -93,12 +93,12 @@ func init() {
 	viamPackagesDir = filepath.Join(ViamDotDir, PackagesDirName)
 }
 
-func getCloudCacheFilePath(id string) string {
+func GetCloudCacheFilePath(id string) string {
 	return filepath.Join(ViamDotDir, fmt.Sprintf("cached_cloud_config_%s.json", id))
 }
 
-func readFromCache(id string) (*Config, error) {
-	r, err := os.Open(getCloudCacheFilePath(id))
+func ReadFromCache(id string) (*Config, error) {
+	r, err := os.Open(GetCloudCacheFilePath(id))
 	if err != nil {
 		return nil, err
 	}
@@ -110,15 +110,15 @@ func readFromCache(id string) (*Config, error) {
 
 	if err := json.NewDecoder(r).Decode(unprocessedConfig); err != nil {
 		// clear the cache if we cannot parse the file.
-		clearCache(id)
+		ClearCache(id)
 		return nil, errors.Wrap(err, "cannot parse the cached config as json")
 	}
 	return unprocessedConfig, nil
 }
 
-func clearCache(id string) {
+func ClearCache(id string) {
 	utils.UncheckedErrorFunc(func() error {
-		return os.Remove(getCloudCacheFilePath(id))
+		return os.Remove(GetCloudCacheFilePath(id))
 	})
 }
 
@@ -126,10 +126,10 @@ func readCertificateDataFromCloudGRPC(ctx context.Context,
 	cloudConfigFromDisk *Cloud,
 	logger logging.Logger,
 	conn rpc.ClientConn,
-) (tlsConfig, error) {
+) (TlsConfig, error) {
 	conn, err := CreateNewGRPCClient(ctx, cloudConfigFromDisk, logger)
 	if err != nil {
-		return tlsConfig{}, err
+		return TlsConfig{}, err
 	}
 	defer utils.UncheckedErrorFunc(conn.Close)
 
@@ -137,23 +137,23 @@ func readCertificateDataFromCloudGRPC(ctx context.Context,
 	res, err := service.Certificate(ctx, &apppb.CertificateRequest{Id: cloudConfigFromDisk.ID})
 	if err != nil {
 		// Check cache?
-		return tlsConfig{}, err
+		return TlsConfig{}, err
 	}
 	if res.TlsCertificate == "" {
-		return tlsConfig{}, errors.New("no TLS certificate yet from cloud; try again later")
+		return TlsConfig{}, errors.New("no TLS certificate yet from cloud; try again later")
 	}
 	if res.TlsPrivateKey == "" {
-		return tlsConfig{}, errors.New("no TLS private key yet from cloud; try again later")
+		return TlsConfig{}, errors.New("no TLS private key yet from cloud; try again later")
 	}
 
-	return tlsConfig{
+	return TlsConfig{
 		certificate: res.TlsCertificate,
 		privateKey:  res.TlsPrivateKey,
 	}, nil
 }
 
-// shouldCheckForCert checks the Cloud config to see if the TLS cert should be refetched.
-func shouldCheckForCert(prevCloud, cloud *Cloud) bool {
+// ShouldCheckForCert checks the Cloud config to see if the TLS cert should be refetched.
+func ShouldCheckForCert(prevCloud, cloud *Cloud) bool {
 	// only checking the same fields as the ones that are explicitly overwritten in mergeCloudConfig
 	diffFQDN := prevCloud.FQDN != cloud.FQDN
 	diffLocalFQDN := prevCloud.LocalFQDN != cloud.LocalFQDN
@@ -196,7 +196,7 @@ func GetTimeoutCtx(ctx context.Context, shouldReadFromCache bool, id string) (co
 	// use shouldReadFromCache to determine whether this is part of initial read or not, but only shorten timeout
 	// if cached config exists
 	cachedConfigExists := false
-	if _, err := os.Stat(getCloudCacheFilePath(id)); err == nil {
+	if _, err := os.Stat(GetCloudCacheFilePath(id)); err == nil {
 		cachedConfigExists = true
 	}
 	if shouldReadFromCache && cachedConfigExists {
@@ -205,9 +205,9 @@ func GetTimeoutCtx(ctx context.Context, shouldReadFromCache bool, id string) (co
 	return context.WithTimeout(ctx, timeout)
 }
 
-// readFromCloud fetches a robot config from the cloud based
+// ReadFromCloud fetches a robot config from the cloud based
 // on the given config.
-func readFromCloud(
+func ReadFromCloud(
 	ctx context.Context,
 	originalCfg,
 	prevCfg *Config,
@@ -224,13 +224,13 @@ func readFromCloud(
 	}
 
 	// process the config
-	cfg, err := processConfigFromCloud(unprocessedConfig, logger)
+	cfg, err := ProcessConfigFromCloud(unprocessedConfig, logger)
 	if err != nil {
 		// If we cannot process the config from the cache we should clear it.
 		if cached {
 			// clear cache
 			logger.Warn("Detected failure to process the cached config, clearing cache.")
-			clearCache(cloudCfg.ID)
+			ClearCache(cloudCfg.ID)
 		}
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func readFromCloud(
 		return nil, errors.New("expected config to have cloud section")
 	}
 
-	tls := tlsConfig{
+	tls := TlsConfig{
 		// both fields are empty if not cached, since its a separate request, which we
 		// check next
 		certificate: cfg.Cloud.TLSCertificate,
@@ -248,12 +248,12 @@ func readFromCloud(
 	if !cached {
 		// Try to get TLS information from the cached config (if it exists) even if we
 		// got a new config from the cloud.
-		if err := tls.readFromCache(cloudCfg.ID, logger); err != nil {
+		if err := tls.ReadFromCache(cloudCfg.ID, logger); err != nil {
 			return nil, err
 		}
 	}
 
-	if prevCfg != nil && shouldCheckForCert(prevCfg.Cloud, cfg.Cloud) {
+	if prevCfg != nil && ShouldCheckForCert(prevCfg.Cloud, cfg.Cloud) {
 		checkForNewCert = true
 	}
 
@@ -316,13 +316,13 @@ func readFromCloud(
 	return cfg, nil
 }
 
-type tlsConfig struct {
+type TlsConfig struct {
 	certificate string
 	privateKey  string
 }
 
-func (tls *tlsConfig) readFromCache(id string, logger logging.Logger) error {
-	cachedCfg, err := readFromCache(id)
+func (tls *TlsConfig) ReadFromCache(id string, logger logging.Logger) error {
+	cachedCfg, err := ReadFromCache(id)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		logger.Warn("No cached config, using cloud TLS config.")
@@ -336,7 +336,7 @@ func (tls *tlsConfig) readFromCache(id string, logger logging.Logger) error {
 		if !cachedCfg.Cloud.SignalingInsecure {
 			if err := cachedCfg.Cloud.ValidateTLS("cloud"); err != nil {
 				logger.Warn("Detected failure to process the cached config when retrieving TLS config, clearing cache.")
-				clearCache(id)
+				ClearCache(id)
 				return err
 			}
 		}
@@ -413,7 +413,7 @@ func fromReader(
 	}
 
 	if shouldReadFromCloud && cfgFromDisk.Cloud != nil {
-		cfg, err := readFromCloud(ctx, cfgFromDisk, nil, true, true, logger, conn)
+		cfg, err := ReadFromCloud(ctx, cfgFromDisk, nil, true, true, logger, conn)
 		return cfg, err
 	}
 
@@ -432,22 +432,22 @@ func (c *Config) ProcessLocal(logger logging.Logger) error {
 	return nil
 }
 
-// processConfigFromCloud returns a copy of the current config with all attributes parsed
+// ProcessConfigFromCloud returns a copy of the current config with all attributes parsed
 // and config validated with the assumption the config came from the cloud.
 // Returns an error if the unprocessedConfig is non-valid.
-func processConfigFromCloud(unprocessedConfig *Config, logger logging.Logger) (*Config, error) {
-	return processConfig(unprocessedConfig, true, logger)
+func ProcessConfigFromCloud(unprocessedConfig *Config, logger logging.Logger) (*Config, error) {
+	return ProcessReadConfig(unprocessedConfig, true, logger)
 }
 
 // processConfigLocalConfig returns a copy of the current config with all attributes parsed
 // and config validated with the assumption the config came from a local file.
 // Returns an error if the unprocessedConfig is non-valid.
 func processConfigLocalConfig(unprocessedConfig *Config, logger logging.Logger) (*Config, error) {
-	return processConfig(unprocessedConfig, false, logger)
+	return ProcessReadConfig(unprocessedConfig, false, logger)
 }
 
-// additionalModuleEnvVars will get additional environment variables for modules using other parts of the config.
-func additionalModuleEnvVars(cloud *Cloud, auth AuthConfig) map[string]string {
+// AdditionalModuleEnvVars will get additional environment variables for modules using other parts of the config.
+func AdditionalModuleEnvVars(cloud *Cloud, auth AuthConfig) map[string]string {
 	env := make(map[string]string)
 	if cloud != nil {
 		env[rutils.PrimaryOrgIDEnvVar] = cloud.PrimaryOrgID
@@ -476,10 +476,10 @@ func additionalModuleEnvVars(cloud *Cloud, auth AuthConfig) map[string]string {
 	return env
 }
 
-// processConfig processes the config passed in. The config can be either JSON or gRPC derived.
+// ProcessConfig processes the config passed in. The config can be either JSON or gRPC derived.
 // If any part of this function errors, the function will exit and no part of the new config will be returned
 // until it is corrected.
-func processConfig(unprocessedConfig *Config, fromCloud bool, logger logging.Logger) (*Config, error) {
+func ProcessReadConfig(unprocessedConfig *Config, fromCloud bool, logger logging.Logger) (*Config, error) {
 	// Ensure validates the config but also substitutes in some defaults. Implicit dependencies for builtin resource
 	// models are not filled in until attributes are converted.
 	if err := unprocessedConfig.Ensure(fromCloud, logger); err != nil {
@@ -637,7 +637,7 @@ func processConfig(unprocessedConfig *Config, fromCloud bool, logger logging.Log
 
 	// add additional environment vars to modules
 	// adding them here ensures that if the parsed API key changes, the module will be restarted with the updated environment.
-	env := additionalModuleEnvVars(cfg.Cloud, cfg.Auth)
+	env := AdditionalModuleEnvVars(cfg.Cloud, cfg.Auth)
 	if len(env) > 0 {
 		for _, m := range cfg.Modules {
 			m.MergeEnvVars(env)
@@ -663,7 +663,7 @@ func getFromCloudOrCache(ctx context.Context, cloudCfg *Cloud, shouldReadFromCac
 	cfg, errorShouldCheckCache, err := getFromCloudGRPC(ctxWithTimeout, cloudCfg, logger)
 	if err != nil {
 		if shouldReadFromCache && errorShouldCheckCache {
-			cachedConfig, cacheErr := readFromCache(cloudCfg.ID)
+			cachedConfig, cacheErr := ReadFromCache(cloudCfg.ID)
 			if cacheErr != nil {
 				if os.IsNotExist(cacheErr) {
 					// Return original http error if failed to load from cache.
@@ -677,7 +677,7 @@ func getFromCloudOrCache(ctx context.Context, cloudCfg *Cloud, shouldReadFromCac
 			}
 
 			lastUpdated := "unknown"
-			if fInfo, err := os.Stat(getCloudCacheFilePath(cloudCfg.ID)); err == nil {
+			if fInfo, err := os.Stat(GetCloudCacheFilePath(cloudCfg.ID)); err == nil {
 				// Use logging.DefaultTimeFormatStr since this time will be logged.
 				lastUpdated = fInfo.ModTime().Format(logging.DefaultTimeFormatStr)
 			}
