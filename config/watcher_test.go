@@ -17,6 +17,7 @@ import (
 	"go.viam.com/rdk/components/arm"
 	"go.viam.com/rdk/config"
 	"go.viam.com/rdk/config/testutils"
+	"go.viam.com/rdk/grpc"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	rutils "go.viam.com/rdk/utils"
@@ -24,7 +25,7 @@ import (
 
 func TestNewWatcherNoop(t *testing.T) {
 	logger := logging.NewTestLogger(t)
-	watcher, err := config.NewWatcher(context.Background(), &config.Config{}, logger)
+	watcher, err := config.NewWatcher(context.Background(), &config.Config{}, logger, &grpc.AppConn{})
 	test.That(t, err, test.ShouldBeNil)
 
 	timer := time.NewTimer(time.Second)
@@ -45,7 +46,7 @@ func TestNewWatcherFile(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	defer os.Remove(temp.Name())
 
-	watcher, err := config.NewWatcher(context.Background(), &config.Config{ConfigFilePath: temp.Name()}, logger)
+	watcher, err := config.NewWatcher(context.Background(), &config.Config{ConfigFilePath: temp.Name()}, logger, &grpc.AppConn{})
 	test.That(t, err, test.ShouldBeNil)
 
 	writeConf := func(conf *config.Config) {
@@ -271,7 +272,7 @@ func TestNewWatcherCloud(t *testing.T) {
 
 	storeConfigInServer(confToReturn)
 
-	watcher, err := config.NewWatcher(context.Background(), &config.Config{Cloud: newCloudConf()}, logger)
+	watcher, err := config.NewWatcher(context.Background(), &config.Config{Cloud: newCloudConf()}, logger, &grpc.AppConn{})
 	test.That(t, err, test.ShouldBeNil)
 
 	confToExpect := confToReturn
