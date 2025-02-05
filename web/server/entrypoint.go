@@ -80,7 +80,9 @@ func logViamEnvVariables(logger logging.Logger) {
 		viamEnvVariables = append(viamEnvVariables, "HOME", rutils.PlatformHomeDir())
 	}
 	if len(viamEnvVariables) != 0 {
-		logger.Infow("Starting viam-server with following environment variables", viamEnvVariables...)
+		logger.Infow(
+			"Starting viam-server with following environment variables",
+			viamEnvVariables...)
 	}
 }
 
@@ -175,7 +177,11 @@ func RunServer(ctx context.Context, args []string, _ logging.Logger) (err error)
 
 	// Read the config from disk and use it to initialize the remote logger.
 	initialReadCtx, cancel := context.WithTimeout(ctx, time.Second*5)
-	cfgFromDisk, err := config.ReadLocalConfig(initialReadCtx, argsParsed.ConfigFile, logger.Sublogger("config"))
+	cfgFromDisk, err := config.ReadLocalConfig(
+		initialReadCtx,
+		argsParsed.ConfigFile,
+		logger.Sublogger("config"),
+	)
 	if err != nil {
 		cancel()
 		return err
@@ -206,7 +212,8 @@ func RunServer(ctx context.Context, args []string, _ logging.Logger) (err error)
 
 	// Start remote logging with config from disk.
 	// This is to ensure we make our best effort to write logs for failures loading the remote config.
-	if cfgFromDisk.Cloud != nil && (cfgFromDisk.Cloud.LogPath != "" || cfgFromDisk.Cloud.AppAddress != "") {
+	if cfgFromDisk.Cloud != nil &&
+		(cfgFromDisk.Cloud.LogPath != "" || cfgFromDisk.Cloud.AppAddress != "") {
 		netAppender, err := logging.NewNetAppender(
 			&logging.CloudConfig{
 				AppAddress: cfgFromDisk.Cloud.AppAddress,
@@ -273,9 +280,12 @@ func (s *robotServer) createWebOptions(cfg *config.Config) (weboptions.Options, 
 	options.PreferWebRTC = s.args.WebRTC
 	options.DisableMulticastDNS = s.args.DisableMulticastDNS
 	if cfg.Cloud != nil && s.args.AllowInsecureCreds {
-		options.SignalingDialOpts = append(options.SignalingDialOpts, rpc.WithAllowInsecureWithCredentialsDowngrade())
+		options.SignalingDialOpts = append(
+			options.SignalingDialOpts,
+			rpc.WithAllowInsecureWithCredentialsDowngrade(),
+		)
 	}
-	options.SignalingDialOpts = append(options.SignalingDialOpts, rpc.WithExternalSignalingConn(s.conn))
+	options.SignalingDialOpts = append(options.SignalingDialOpts, rpc.WithSignalingConn(s.conn))
 
 	if len(options.Auth.Handlers) == 0 {
 		host, _, err := net.SplitHostPort(cfg.Network.BindAddress)
@@ -338,7 +348,11 @@ func (s *robotServer) configWatcher(ctx context.Context, currCfg *config.Config,
 			}
 
 			// flag to restart web service if necessary
-			diff, err := config.DiffConfigs(*currCfg, *processedConfig, s.args.RevealSensitiveConfigDiffs)
+			diff, err := config.DiffConfigs(
+				*currCfg,
+				*processedConfig,
+				s.args.RevealSensitiveConfigDiffs,
+			)
 			if err != nil {
 				s.logger.Errorw("reconfiguration aborted: error diffing config", "error", err)
 				continue
@@ -350,7 +364,11 @@ func (s *robotServer) configWatcher(ctx context.Context, currCfg *config.Config,
 				r.StopWeb()
 				options, err = s.createWebOptions(processedConfig)
 				if err != nil {
-					s.logger.Errorw("reconfiguration aborted: error creating weboptions", "error", err)
+					s.logger.Errorw(
+						"reconfiguration aborted: error creating weboptions",
+						"error",
+						err,
+					)
 					continue
 				}
 			}
@@ -367,7 +385,11 @@ func (s *robotServer) configWatcher(ctx context.Context, currCfg *config.Config,
 
 			if !diff.NetworkEqual {
 				if err := r.StartWeb(ctx, options); err != nil {
-					s.logger.Errorw("reconfiguration failed: error starting web service while reconfiguring", "error", err)
+					s.logger.Errorw(
+						"reconfiguration failed: error starting web service while reconfiguring",
+						"error",
+						err,
+					)
 				}
 			}
 			currCfg = processedConfig
@@ -427,7 +449,11 @@ func (s *robotServer) serveWeb(ctx context.Context, cfg *config.Config) (err err
 					if robot != nil {
 						robot.Kill()
 					}
-					s.logger.Fatalw("server failed to cleanly shutdown after deadline", "deadline", hungShutdownDeadline)
+					s.logger.Fatalw(
+						"server failed to cleanly shutdown after deadline",
+						"deadline",
+						hungShutdownDeadline,
+					)
 					return true
 				}
 			case <-doneServing:
